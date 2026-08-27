@@ -137,9 +137,9 @@ ARG ENABLE_RECURSIVE_ADDITIONAL_PIP="false"
 RUN echo "pip install pip \\" >> $WORKSPACE/.install-dependencies.sh && \
     set -o pipefail && \
     if [[ $ENABLE_RECURSIVE_ADDITIONAL_PIP == 'true' ]]; then \
-        find . -type f -name $(basename ${ADDITIONAL_PIP_FILE}) -exec sed "$ a\\" {} \; | awk '{print "  " $0 " \\"}' >> $WORKSPACE/.install-dependencies.sh ; \
+        find . -type f -name $(basename ${ADDITIONAL_PIP_FILE}) -exec sed "$ a\\" {} \; | awk '{print "  \"" $0 "\" \\"}' >> $WORKSPACE/.install-dependencies.sh ; \
     elif [[ -f src/target/${ADDITIONAL_PIP_FILE} ]]; then \
-        cat src/target/${ADDITIONAL_PIP_FILE} | awk '{ gsub(/#.*/, ""); gsub(/^[ \t]+|[ \t]+$/, ""); if (NF) print "  " $0 " \\" }' >> $WORKSPACE/.install-dependencies.sh ; \
+        cat src/target/${ADDITIONAL_PIP_FILE} | awk '{ gsub(/#.*/, ""); gsub(/^[ \t]+|[ \t]+$/, ""); if (NF) print "  \"" $0 "\" \\" }' >> $WORKSPACE/.install-dependencies.sh ; \
     fi && \
     echo ";" >> $WORKSPACE/.install-dependencies.sh
 
@@ -262,8 +262,45 @@ ENTRYPOINT ["/tini", "--", "/entrypoint.sh"]
 ############ dev ###############################################################
 FROM dependencies-install AS dev
 
+# configure VS Code devcontainer
+# Reference: https://containers.dev/implementors/json_reference/
+# Aligned with: https://github.com/openads-project/openads-dev-environment/blob/main/.devcontainer/devcontainer.json
+LABEL devcontainer.metadata='[{ \
+  "capAdd": [ "SYS_PTRACE" ], \
+  "containerEnv": { \
+    "PIP_BREAK_SYSTEM_PACKAGES": "1" \
+    }, \
+  "customizations": { \
+    "vscode": { \
+      "settings": { \
+        "ROS2.rosSetupScript": "/docker-ros/ws/install/setup.bash" \
+      }, \
+      "extensions": [ \
+        "althack.ament-task-provider", \
+        "cschlosser.doxdocgen", \
+        "mhutchie.git-graph", \
+        "ms-python.black-formatter", \
+        "ms-python.flake8", \
+        "ms-python.python", \
+        "ms-vscode.cpp-devtools", \
+        "ms-vscode.cpptools-themes", \
+        "ms-vscode.cpptools", \
+        "njpwerner.autodocstring", \
+        "Ranch-Hand-Robotics.rde-pack" \
+      ] \
+    } \
+  } \
+}]'
+
 # copy contents of repository from dependencies stage
 COPY --from=dependencies $WORKSPACE/src $WORKSPACE/src
+
+# write default command into script
+ARG COMMAND
+ENV DEFAULT_CMD=${COMMAND}
+RUN echo "source ${WORKSPACE}/install/setup.bash" > /usr/local/bin/run_default_command && \
+    echo "${DEFAULT_CMD}" >> /usr/local/bin/run_default_command && \
+    chmod +x /usr/local/bin/run_default_command
 
 CMD ["bash"]
 

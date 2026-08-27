@@ -105,6 +105,18 @@ inputs:
   image-tag:
     description: "Image tag of run image"
     default: latest
+  label-authors:
+    description: "Set `org.opencontainers.image.authors` label (unset by default)"
+  label-description:
+    description: "Override `org.opencontainers.image.description` label (defaults to the GitHub repository description from the event payload when available, otherwise unset)"
+  label-licenses:
+    description: "Override `org.opencontainers.image.licenses` label (defaults to the repository root `LICENSE` file when detected, otherwise unset)"
+  label-maintainer:
+    description: "Set `maintainer` label (unset by default)"
+  label-url:
+    description: "Override `org.opencontainers.image.url` label (defaults to the repository URL from CI metadata or `origin`)"
+  label-version:
+    description: "Override `org.opencontainers.image.version` label (defaults to the tag name in tag pipelines or the current commit SHA)"
   platform:
     description: "Target platform architecture (comma-separated list) [amd64|arm64|...]"
   registry:
@@ -245,6 +257,12 @@ runs:
         GIT_SSH_PRIVATE_KEY: ${{ inputs.git-ssh-private-key }}
         IMAGE_NAME: ${{ steps.image-name.outputs.lowercase }}
         IMAGE_TAG: ${{ inputs.image-tag }}
+        LABEL_AUTHORS: ${{ inputs.label-authors }}
+        LABEL_DESCRIPTION: ${{ inputs.label-description }}
+        LABEL_LICENSES: ${{ inputs.label-licenses }}
+        LABEL_MAINTAINER: ${{ inputs.label-maintainer }}
+        LABEL_URL: ${{ inputs.label-url }}
+        LABEL_VERSION: ${{ inputs.label-version }}
         PLATFORM: ${{ inputs.platform }}
         RMW_IMPLEMENTATION: ${{ inputs.rmw-implementation }}
         ROS_DISTRO: ${{ inputs.ros-distro }}
@@ -265,6 +283,7 @@ runs:
       env:
         ADDITIONAL_DEBS: git
         AFTER_INIT_EMBED: '[[ -n ${{ inputs.git-https-server }} ]] && git config --global url.https://${{ inputs.git-https-user }}:${{ inputs.git-https-password }}@${{ inputs.git-https-server }}.insteadOf https://${{ inputs.git-https-server }}'
+        BEFORE_BUILD_TARGET_WORKSPACE: '[ -f /opt/ws_base_image/install/setup.bash ] && echo "source /opt/ws_base_image/install/setup.bash" >> /root/upstream_ws/install/setup.bash || true'
         DOCKER_IMAGE: ${{ steps.build-images.outputs.INDUSTRIAL_CI_IMAGE }}
         DOCKER_PULL: false
         DOCKER_RUN_OPTS: -u root:root
@@ -313,7 +332,13 @@ runs:
         GIT_SSH_KNOWN_HOST_KEYS: ${{ inputs.git-ssh-known-host-keys }}
         GIT_SSH_PRIVATE_KEY: ${{ inputs.git-ssh-private-key }}
         IMAGE_NAME: ${{ steps.image-name.outputs.lowercase }}
-        IMAGE_TAG: ${{ inputs.image-tag }}
+        IMAGE_TAG: ${{ github.ref_type == 'tag' && (inputs.image-tag != 'latest' && format('{0}-{1}', inputs.image-tag, github.ref_name) || github.ref_name) || inputs.image-tag }}
+        LABEL_AUTHORS: ${{ inputs.label-authors }}
+        LABEL_DESCRIPTION: ${{ inputs.label-description }}
+        LABEL_LICENSES: ${{ inputs.label-licenses }}
+        LABEL_MAINTAINER: ${{ inputs.label-maintainer }}
+        LABEL_URL: ${{ inputs.label-url }}
+        LABEL_VERSION: ${{ inputs.label-version }}
         PLATFORM: ${{ inputs.platform }}
         RMW_IMPLEMENTATION: ${{ inputs.rmw-implementation }}
         ROS_DISTRO: ${{ inputs.ros-distro }}
@@ -323,7 +348,7 @@ runs:
         TARGET: ${{ inputs.target }}
         VCS_IMPORT_FILE: ${{ inputs.vcs-import-file }}
         _ENABLE_IMAGE_PUSH: true
-        _IMAGE_POSTFIX: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) && format('_{0}_ci', steps.slugify-ref-name.outputs.slug) || '' }}
+        _IMAGE_POSTFIX: ${{ github.ref_type != 'tag' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch) && format('_{0}_ci', steps.slugify-ref-name.outputs.slug) || '' }}
 
     - name: Push images (as latest)
       if: ${{ inputs.enable-push-as-latest == 'true' }}
@@ -344,7 +369,7 @@ runs:
         COMMAND: ${{ inputs.command }}
         CMAKE_ARGS: ${{ inputs.cmake-args }}
         DEV_IMAGE_NAME: ${{ steps.dev-image-name.outputs.lowercase }}
-        DEV_IMAGE_TAG: latest-dev
+        DEV_IMAGE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || 'latest' }}-dev
         DISABLE_ROS_INSTALLATION: ${{ inputs.disable-ros-installation }}
         ENABLE_RECURSIVE_ADDITIONAL_DEBS: ${{ inputs.enable-recursive-additional-debs }}
         ENABLE_RECURSIVE_ADDITIONAL_PIP: ${{ inputs.enable-recursive-additional-pip }}
@@ -360,14 +385,20 @@ runs:
         GIT_SSH_KNOWN_HOST_KEYS: ${{ inputs.git-ssh-known-host-keys }}
         GIT_SSH_PRIVATE_KEY: ${{ inputs.git-ssh-private-key }}
         IMAGE_NAME: ${{ steps.image-name.outputs.lowercase }}
-        IMAGE_TAG: latest
+        IMAGE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || 'latest' }}
+        LABEL_AUTHORS: ${{ inputs.label-authors }}
+        LABEL_DESCRIPTION: ${{ inputs.label-description }}
+        LABEL_LICENSES: ${{ inputs.label-licenses }}
+        LABEL_MAINTAINER: ${{ inputs.label-maintainer }}
+        LABEL_URL: ${{ inputs.label-url }}
+        LABEL_VERSION: ${{ inputs.label-version }}
         PLATFORM: ${{ inputs.platform }}
         RMW_IMPLEMENTATION: ${{ inputs.rmw-implementation }}
         ROS_DISTRO: ${{ inputs.ros-distro }}
         SLIM_BUILD_ARGS: ${{ inputs.slim-build-args }}
         SLIM_IMAGE_NAME: ${{ steps.slim-image-name.outputs.lowercase }}
-        SLIM_IMAGE_TAG: latest-slim
+        SLIM_IMAGE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || 'latest' }}-slim
         TARGET: ${{ inputs.target }}
         VCS_IMPORT_FILE: ${{ inputs.vcs-import-file }}
         _ENABLE_IMAGE_PUSH: true
-        _IMAGE_POSTFIX: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) && format('_{0}_ci', steps.slugify-ref-name.outputs.slug) || '' }}
+        _IMAGE_POSTFIX: ${{ github.ref_type != 'tag' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch) && format('_{0}_ci', steps.slugify-ref-name.outputs.slug) || '' }}
